@@ -42,6 +42,7 @@ public class TransactionProcessorService {
         } catch (Exception e) {
             log.error("Error processing transaction {}", transaction.getTransactionId(), e);
             updateTransactionStatus(transaction.getTransactionId(), PROCESSING.name(), FAILED.name(), e.getMessage());
+            return;
         }
 
         insertLedgerEntry(transaction, true);
