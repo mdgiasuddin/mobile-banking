@@ -66,7 +66,9 @@ public class MerchantTransactionAggregator {
                 .map((windowedKey, agg) -> {
                     MerchantSettlementEvent merchantSettlement =
                             new MerchantSettlementEvent(
-                                    UUID.randomUUID(),
+                                    UUID.nameUUIDFromBytes(
+                                            (windowedKey.key() + "-" + windowedKey.window().end()).getBytes()
+                                    ),
                                     windowedKey.key(),
                                     agg.getTotalAmount(),
                                     agg.getCount(),
