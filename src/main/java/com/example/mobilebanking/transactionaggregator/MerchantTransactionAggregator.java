@@ -12,7 +12,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Suppressed;
@@ -35,28 +34,20 @@ public class MerchantTransactionAggregator {
     private final ObjectMapper objectMapper;
 
     @Bean
-    public KStream<String, TransactionEvent> topology(StreamsBuilder builder) {
+    public void merchantSettlementTopology(StreamsBuilder builder) {
 
         JsonSerde<TransactionEvent> transactionSerde = new JsonSerde<>(TransactionEvent.class, objectMapper);
         JsonSerde<MerchantAggregate> aggregateSerde = new JsonSerde<>(MerchantAggregate.class, objectMapper);
         JsonSerde<MerchantSettlementEvent> settlementSerde = new JsonSerde<>(MerchantSettlementEvent.class, objectMapper);
 
-        // 🔹 Source
-        KStream<String, TransactionEvent> source =
-                builder.stream(
-                        "transaction",
-                        Consumed.with(Serdes.String(), transactionSerde)
-                );
-
-        source
+        builder.stream("transaction", Consumed.with(Serdes.String(), transactionSerde))
                 .filter((k, tx) -> tx != null && tx.isP2M())
                 .groupBy(
                         (k, tx) -> String.valueOf(tx.getToAccountId()),
                         Grouped.with(Serdes.String(), transactionSerde)
                 )
-                .windowedBy(
-                        TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(1))
-                )
+                // Use 24-hour windows with a grace period for late-arriving mobile network packets
+                .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofMinutes(15)))
                 .aggregate(
                         MerchantAggregate::new,
                         (merchantId, tx, agg) -> agg.add(tx),
@@ -88,9 +79,6 @@ public class MerchantTransactionAggregator {
                         "merchant-settlement",
                         Produced.with(Serdes.String(), settlementSerde)
                 );
-
-        return source;
-
     }
 
 }
